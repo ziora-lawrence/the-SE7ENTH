@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { products } from '../data/products';
 import { useCart } from '../context/CartContext';
@@ -14,15 +14,20 @@ export default function Shop() {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedSizes, setSelectedSizes] = useState([]);
   const [priceRange, setPriceRange] = useState(60000);
+  const [activeCard, setActiveCard] = useState(null);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [cursorVisible, setCursorVisible] = useState(false);
   const { addToCart } = useCart();
   const gridRef = useRef(null);
 
-  const filteredProducts = products.filter(product => {
-    const categoryMatch = selectedCategory === 'All' || product.category === selectedCategory;
-    const sizeMatch = selectedSizes.length === 0 || product.sizes.some(s => selectedSizes.includes(s));
-    const priceMatch = product.price <= priceRange;
-    return categoryMatch && sizeMatch && priceMatch;
-  });
+  const filteredProducts = useMemo(() => {
+    return products.filter(product => {
+      const categoryMatch = selectedCategory === 'All' || product.category === selectedCategory;
+      const sizeMatch = selectedSizes.length === 0 || product.sizes.some(s => selectedSizes.includes(s));
+      const priceMatch = product.price <= priceRange;
+      return categoryMatch && sizeMatch && priceMatch;
+    });
+  }, [selectedCategory, selectedSizes, priceRange]);
 
   const toggleSize = (size) => {
     setSelectedSizes(prev =>
@@ -30,18 +35,56 @@ export default function Shop() {
     );
   };
 
+  // Custom cursor tracking & Magnetic buttons
+  useEffect(() => {
+    const move = (e) => {
+      setMousePos({ x: e.clientX, y: e.clientY });
+      
+      document.querySelectorAll('.magnetic-btn').forEach(btn => {
+        const rect = btn.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        const distanceX = e.clientX - centerX;
+        const distanceY = e.clientY - centerY;
+        const distance = Math.sqrt(distanceX * distanceX + distanceY * distanceY);
+        
+        if (distance < 80) {
+          gsap.to(btn, { x: distanceX * 0.4, y: distanceY * 0.4, duration: 0.3, ease: 'power2.out' });
+        } else {
+          gsap.to(btn, { x: 0, y: 0, duration: 0.6, ease: 'elastic.out(1, 0.3)' });
+        }
+      });
+    };
+    window.addEventListener('mousemove', move);
+    return () => window.removeEventListener('mousemove', move);
+  }, []);
+
   useEffect(() => {
     const ctx = gsap.context(() => {
-      gsap.from('.shop-product-card', {
-        y: 40,
+      // Sidebar stagger
+      gsap.from('.sidebar-anim', {
+        x: -30,
         opacity: 0,
-        duration: 0.6,
+        duration: 0.8,
+        stagger: 0.1,
+        ease: 'power3.out',
+      });
+    });
+    return () => ctx.revert();
+  }, []);
+
+  useEffect(() => {
+    const ctx = gsap.context(() => {
+      // Product cards stagger
+      gsap.from('.shop-product-card', {
+        y: 60,
+        opacity: 0,
+        duration: 0.8,
         stagger: 0.1,
         ease: 'power3.out',
         scrollTrigger: {
           trigger: gridRef.current,
-          start: 'top 80%',
-          toggleActions: 'play none none none',
+          start: 'top 85%',
         },
       });
     });
@@ -49,23 +92,46 @@ export default function Shop() {
   }, [filteredProducts]);
 
   return (
-    <div style={{ paddingTop: '100px', minHeight: '100vh', background: '#0A0A0A' }}>
+    <div style={{ paddingTop: '100px', minHeight: '100vh', background: '#0A0A0A', overflowX: 'hidden' }}>
+      
+      {/* Custom cursor */}
+      <div style={{
+        position: 'fixed',
+        left: mousePos.x - 20,
+        top: mousePos.y - 20,
+        width: 40,
+        height: 40,
+        border: '1px solid rgba(158,139,110,0.6)',
+        borderRadius: '50%',
+        pointerEvents: 'none',
+        zIndex: 9999,
+        transition: 'transform 0.15s ease, opacity 0.3s ease',
+        transform: cursorVisible ? 'scale(1.8)' : 'scale(1)',
+        opacity: 0.7,
+        mixBlendMode: 'difference',
+      }} />
+
       <div className="container py-5">
-        <div className="text-center mb-5">
-          <h1
+        <div className="text-center mb-5" style={{ overflow: 'hidden' }}>
+          <img
+            src="/se7enth-logo.png"
+            alt="Se7enth Clothing"
             style={{
-              fontSize: 'clamp(2rem, 5vw, 3rem)',
-              fontWeight: 700,
-              color: '#E8DCC8',
-              textTransform: 'uppercase',
-              letterSpacing: '3px',
-              marginBottom: '12px',
+              maxWidth: '220px',
+              marginBottom: '20px',
+              opacity: 0.9,
+              mixBlendMode: 'screen', // Helps if the logo has a black background
             }}
-          >
-            Shop
-          </h1>
-          <p style={{ color: '#9E8B6E', fontSize: '0.9rem' }}>
-            {filteredProducts.length} product{filteredProducts.length !== 1 ? 's' : ''} available
+            onError={e => e.target.style.display = 'none'}
+          />
+          <p style={{ 
+            color: '#9E8B6E', 
+            fontSize: '0.75rem', 
+            fontWeight: 700, 
+            textTransform: 'uppercase', 
+            letterSpacing: '4px' 
+          }}>
+            ✦ {filteredProducts.length} product{filteredProducts.length !== 1 ? 's' : ''} available ✦
           </p>
         </div>
 
@@ -74,40 +140,46 @@ export default function Shop() {
           <div className="col-lg-3 mb-4">
             <div
               style={{
-                background: '#141414',
-                border: '1px solid #2A2A2A',
-                padding: '24px',
+                background: '#111',
+                border: '1px solid #1A1A1A',
+                padding: '32px 24px',
                 position: 'sticky',
-                top: '100px',
+                top: '120px',
               }}
             >
               {/* Category Filter */}
-              <div className="mb-4">
+              <div className="mb-5 sidebar-anim">
                 <h5
                   style={{
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
+                    fontSize: '0.65rem',
+                    fontWeight: 700,
                     textTransform: 'uppercase',
-                    letterSpacing: '2px',
+                    letterSpacing: '3px',
                     color: '#9E8B6E',
-                    marginBottom: '16px',
+                    marginBottom: '20px',
                   }}
                 >
                   Category
                 </h5>
-                <div className="d-flex flex-column gap-2">
+                <div className="d-flex flex-column gap-3">
                   {categories.map(cat => (
                     <button
                       key={cat}
                       onClick={() => setSelectedCategory(cat)}
-                      className="btn text-start p-0"
+                      onMouseEnter={() => setCursorVisible(true)}
+                      onMouseLeave={() => setCursorVisible(false)}
+                      className="text-start p-0"
                       style={{
-                        color: selectedCategory === cat ? '#9E8B6E' : '#E8DCC8',
-                        fontSize: '0.85rem',
+                        color: selectedCategory === cat ? '#E8DCC8' : 'rgba(232,220,200,0.4)',
+                        fontSize: '0.8rem',
                         fontWeight: selectedCategory === cat ? 600 : 400,
-                        transition: 'color 0.3s ease',
+                        transition: 'all 0.3s ease',
                         background: 'none',
                         border: 'none',
+                        letterSpacing: '1px',
+                        textTransform: 'uppercase',
+                        paddingLeft: selectedCategory === cat ? '10px' : '0',
+                        borderLeft: selectedCategory === cat ? '2px solid #9E8B6E' : 'none',
                       }}
                     >
                       {cat}
@@ -117,15 +189,15 @@ export default function Shop() {
               </div>
 
               {/* Size Filter */}
-              <div className="mb-4">
+              <div className="mb-5 sidebar-anim">
                 <h5
                   style={{
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
+                    fontSize: '0.65rem',
+                    fontWeight: 700,
                     textTransform: 'uppercase',
-                    letterSpacing: '2px',
+                    letterSpacing: '3px',
                     color: '#9E8B6E',
-                    marginBottom: '16px',
+                    marginBottom: '20px',
                   }}
                 >
                   Size
@@ -135,11 +207,28 @@ export default function Shop() {
                     <button
                       key={size}
                       onClick={() => toggleSize(size)}
-                      className="size-btn"
+                      onMouseEnter={() => setCursorVisible(true)}
+                      onMouseLeave={() => setCursorVisible(false)}
                       style={{
                         background: selectedSizes.includes(size) ? '#9E8B6E' : 'transparent',
                         color: selectedSizes.includes(size) ? '#0A0A0A' : '#E8DCC8',
-                        borderColor: selectedSizes.includes(size) ? '#9E8B6E' : '#2A2A2A',
+                        borderColor: selectedSizes.includes(size) ? '#9E8B6E' : '#1A1A1A',
+                        borderStyle: 'solid',
+                        borderWidth: '1px',
+                        padding: '8px 16px',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        transition: 'all 0.3s ease',
+                      }}
+                      onMouseOver={e => {
+                        if (!selectedSizes.includes(size)) {
+                          e.currentTarget.style.borderColor = '#9E8B6E';
+                        }
+                      }}
+                      onMouseOut={e => {
+                        if (!selectedSizes.includes(size)) {
+                          e.currentTarget.style.borderColor = '#1A1A1A';
+                        }
                       }}
                     >
                       {size}
@@ -149,18 +238,18 @@ export default function Shop() {
               </div>
 
               {/* Price Range */}
-              <div>
+              <div className="sidebar-anim">
                 <h5
                   style={{
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
+                    fontSize: '0.65rem',
+                    fontWeight: 700,
                     textTransform: 'uppercase',
-                    letterSpacing: '2px',
+                    letterSpacing: '3px',
                     color: '#9E8B6E',
-                    marginBottom: '16px',
+                    marginBottom: '20px',
                   }}
                 >
-                  Price Range
+                  Max Price
                 </h5>
                 <input
                   type="range"
@@ -169,11 +258,13 @@ export default function Shop() {
                   step="5000"
                   value={priceRange}
                   onChange={(e) => setPriceRange(Number(e.target.value))}
-                  style={{ width: '100%', marginBottom: '12px' }}
+                  onMouseEnter={() => setCursorVisible(true)}
+                  onMouseLeave={() => setCursorVisible(false)}
+                  style={{ width: '100%', marginBottom: '16px', accentColor: '#9E8B6E' }}
                 />
                 <div className="d-flex justify-content-between">
-                  <span style={{ color: '#666', fontSize: '0.8rem' }}>₦10,000</span>
-                  <span style={{ color: '#9E8B6E', fontSize: '0.85rem', fontWeight: 600 }}>
+                  <span style={{ color: 'rgba(232,220,200,0.4)', fontSize: '0.75rem', fontWeight: 600 }}>₦10K</span>
+                  <span style={{ color: '#E8DCC8', fontSize: '0.75rem', fontWeight: 700 }}>
                     ₦{priceRange.toLocaleString()}
                   </span>
                 </div>
@@ -187,48 +278,121 @@ export default function Shop() {
               {filteredProducts.map(product => (
                 <div key={product.id} className="col-md-6 col-xl-4 shop-product-card">
                   <div
+                    onMouseEnter={(e) => {
+                      setActiveCard(product.id);
+                      e.currentTarget.style.borderColor = '#9E8B6E';
+                    }}
+                    onMouseLeave={(e) => {
+                      setActiveCard(null);
+                      e.currentTarget.style.borderColor = '#1A1A1A';
+                      gsap.to(e.currentTarget, { transform: 'perspective(800px) rotateX(0deg) rotateY(0deg)', duration: 0.6, ease: 'power2.out' });
+                    }}
+                    onMouseMove={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const x = e.clientX - rect.left;
+                      const y = e.clientY - rect.top;
+                      const centerX = rect.width / 2;
+                      const centerY = rect.height / 2;
+                      const rotateX = ((y - centerY) / centerY) * -10;
+                      const rotateY = ((x - centerX) / centerX) * 10;
+                      gsap.to(e.currentTarget, { 
+                        transform: `perspective(800px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`, 
+                        duration: 0.4, ease: 'power2.out' 
+                      });
+                    }}
                     style={{
-                      background: '#141414',
-                      border: '1px solid #2A2A2A',
+                      background: '#111',
+                      border: activeCard === product.id ? '1px solid #9E8B6E' : '1px solid #1A1A1A',
                       overflow: 'hidden',
-                      transition: 'border-color 0.3s ease',
+                      transition: 'border-color 0.4s ease',
                       height: '100%',
                       display: 'flex',
                       flexDirection: 'column',
+                      position: 'relative',
                     }}
-                    onMouseEnter={e => e.currentTarget.style.borderColor = '#9E8B6E'}
-                    onMouseLeave={e => e.currentTarget.style.borderColor = '#2A2A2A'}
                   >
-                    <Link to={`/product/${product.id}`} style={{ display: 'block', overflow: 'hidden' }}>
+                    <Link 
+                      to={`/product/${product.id}`} 
+                      style={{ display: 'block', overflow: 'hidden', position: 'relative' }}
+                      onMouseEnter={() => setCursorVisible(true)}
+                      onMouseLeave={() => setCursorVisible(false)}
+                    >
                       <img
                         src={product.image}
                         alt={product.name}
                         style={{
                           width: '100%',
-                          height: '320px',
+                          height: '340px',
                           objectFit: 'cover',
-                          transition: 'transform 0.5s ease',
+                          display: 'block',
+                          transition: 'transform 0.7s ease',
+                          transform: activeCard === product.id ? 'scale(1.07)' : 'scale(1)',
                         }}
-                        onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
-                        onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
                       />
+                      {/* Overlay on hover */}
+                      <div style={{
+                        position: 'absolute',
+                        inset: 0,
+                        background: 'rgba(10,10,10,0.45)',
+                        opacity: activeCard === product.id ? 1 : 0,
+                        transition: 'opacity 0.4s ease',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}>
+                        <span style={{
+                          color: '#E8DCC8',
+                          fontSize: '0.65rem',
+                          fontWeight: 700,
+                          textTransform: 'uppercase',
+                          letterSpacing: '4px',
+                          border: '1px solid rgba(232,220,200,0.4)',
+                          padding: '10px 20px',
+                        }}>
+                          View Product
+                        </span>
+                      </div>
                     </Link>
-                    <div style={{ padding: '20px', flex: 1, display: 'flex', flexDirection: 'column' }}>
-                      <p style={{ color: '#9E8B6E', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '8px' }}>
+                    <div style={{ padding: '24px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+                      <p style={{ color: '#9E8B6E', fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '3px', marginBottom: 8 }}>
                         {product.category}
                       </p>
-                      <Link to={`/product/${product.id}`}>
-                        <h3 style={{ fontSize: '0.95rem', fontWeight: 600, color: '#E8DCC8', marginBottom: '8px', textTransform: 'uppercase' }}>
+                      <Link to={`/product/${product.id}`}
+                        onMouseEnter={() => setCursorVisible(true)}
+                        onMouseLeave={() => setCursorVisible(false)}
+                      >
+                        <h3 style={{ fontSize: '0.95rem', fontWeight: 600, color: '#E8DCC8', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '1px' }}>
                           {product.name}
                         </h3>
                       </Link>
-                      <p style={{ color: '#E8DCC8', fontSize: '1rem', fontWeight: 600, marginBottom: '16px' }}>
+                      <p style={{ color: '#E8DCC8', fontSize: '1rem', fontWeight: 600, marginBottom: '24px' }}>
                         ₦{product.price.toLocaleString()}
                       </p>
                       <button
                         onClick={() => addToCart(product, product.sizes[0], 1)}
-                        className="btn-primary mt-auto"
-                        style={{ width: '100%', padding: '10px', fontSize: '0.8rem' }}
+                        className="magnetic-btn mt-auto"
+                        onMouseEnter={() => setCursorVisible(true)}
+                        onMouseLeave={() => setCursorVisible(false)}
+                        style={{ 
+                          width: '100%', 
+                          padding: '12px', 
+                          fontSize: '0.75rem',
+                          fontWeight: 700,
+                          textTransform: 'uppercase',
+                          letterSpacing: '3px',
+                          background: 'transparent',
+                          color: '#9E8B6E',
+                          border: '1px solid #9E8B6E',
+                          transition: 'all 0.3s ease',
+                        }}
+                        onMouseOver={e => {
+                          e.currentTarget.style.background = '#9E8B6E';
+                          e.currentTarget.style.color = '#0A0A0A';
+                        }}
+                        onMouseOut={e => {
+                          e.currentTarget.style.background = 'transparent';
+                          e.currentTarget.style.color = '#9E8B6E';
+                        }}
                       >
                         Add to Cart
                       </button>
@@ -240,7 +404,7 @@ export default function Shop() {
 
             {filteredProducts.length === 0 && (
               <div className="text-center py-5">
-                <p style={{ color: '#666', fontSize: '1rem' }}>
+                <p style={{ color: 'rgba(232,220,200,0.5)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '2px' }}>
                   No products match your filters.
                 </p>
                 <button
@@ -249,7 +413,22 @@ export default function Shop() {
                     setSelectedSizes([]);
                     setPriceRange(60000);
                   }}
-                  className="btn-outline mt-3"
+                  className="magnetic-btn mt-4"
+                  onMouseEnter={() => setCursorVisible(true)}
+                  onMouseLeave={() => setCursorVisible(false)}
+                  style={{
+                    background: 'transparent',
+                    color: '#E8DCC8',
+                    padding: '12px 32px',
+                    fontWeight: 600,
+                    fontSize: '0.75rem',
+                    textTransform: 'uppercase',
+                    letterSpacing: '3px',
+                    border: '1px solid rgba(232,220,200,0.2)',
+                    transition: 'border-color 0.3s ease',
+                  }}
+                  onMouseOver={e => e.currentTarget.style.borderColor = '#9E8B6E'}
+                  onMouseOut={e => e.currentTarget.style.borderColor = 'rgba(232,220,200,0.2)'}
                 >
                   Clear Filters
                 </button>

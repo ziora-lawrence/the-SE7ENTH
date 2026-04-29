@@ -45,7 +45,11 @@ export default function Navbar() {
           <img
             src="/se7enth-logo.png"
             alt="Se7enth Clothing"
-            style={{ height: scrolled ? '36px' : '44px', transition: 'all 0.4s ease' }}
+            style={{ 
+              height: scrolled ? '36px' : '44px', 
+              transition: 'all 0.4s ease',
+              mixBlendMode: 'screen'
+            }}
             onError={(e) => {
               e.target.style.display = 'none';
               e.target.nextSibling.style.display = 'block';

@@ -60,7 +60,7 @@ export default function About() {
               <img
                 src="/se7enth-logo.png"
                 alt="Se7enth Clothing"
-                style={{ maxWidth: '180px', marginBottom: '32px' }}
+                style={{ maxWidth: '180px', marginBottom: '32px', mixBlendMode: 'screen' }}
                 onError={(e) => {
                   e.target.style.display = 'none';
                   document.getElementById('about-logo-fallback').style.display = 'block';
